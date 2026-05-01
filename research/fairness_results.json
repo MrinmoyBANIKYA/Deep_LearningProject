@@ -1,0 +1,1 @@
+[{"Group": "Gender (Female vs Male)", "DIR": "1.0095", "TPR Gap": "-0.0029", "FPR Gap": "-0.0020", "Status": "PASS"}, {"Group": "Geography (Rural+T3 vs T1+T2)", "DIR": "0.9168", "TPR Gap": "0.0285", "FPR Gap": "0.1093", "Status": "PASS"}, {"Group": "Thin-file (Age < 24 vs >= 24)", "DIR": "0.7483", "TPR Gap": "0.0649", "FPR Gap": "0.1840", "Status": "FAIL (Adverse Impact)"}]
