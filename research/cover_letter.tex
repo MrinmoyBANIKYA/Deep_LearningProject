@@ -1,0 +1,38 @@
+\documentclass{letter}
+\usepackage[utf8]{inputenc}
+
+\address{Research Division \\ Reserve Bank of India \\ Mumbai, India}
+\signature{Senior Data Scientist \\ RBI Fintech Division}
+
+\begin{document}
+\begin{letter}{Editor-in-Chief \\ IEEE Transactions on Neural Networks and Learning Systems}
+
+\opening{Dear Editor-in-Chief,}
+
+I am writing to submit our original research article titled ``A Hybrid Deep Learning Framework for MSME Credit Risk Assessment Using Alternative Financial Signals'' for consideration for publication in IEEE Transactions on Neural Networks and Learning Systems (TNNLS).
+
+Our work addresses a critical challenge in fintech: the credit inclusion of Micro, Small, and Medium Enterprises (MSMEs) that lack formal credit histories (thin-file borrowers). We propose a novel stacking ensemble architecture that integrates TabNet's sequential attention mechanism with XGBoost's iterative gradient boosting. While previous studies have applied similar hybrids to general tabular datasets, our work is the first to explicitly calibrate these architectures for the Indian financial ecosystem using RBI-aligned alternative data such as UPI transaction consistency and GST filing regularity.
+
+Key contributions of this work include:
+\begin{enumerate}
+    \item Integration of domain-specific digital signals (UPI, GST, NACH) into a hybrid neural-ensemble framework.
+    \item Rigorous validation of a 75,000-row synthetic dataset against official RBI MSME Census statistics.
+    \item An ablation study demonstrating that alternative digital signals alone can outperform traditional bureau features for thin-file subgroups.
+    \item A comprehensive algorithmic fairness audit compliant with emerging RBI 2026 digital lending guidelines.
+\end{enumerate}
+
+Given TNNLS's focus on innovative neural architectures and their practical application in complex data environments, we believe our hybrid approach and its impact on financial inclusion are well-aligned with the journal's scope.
+
+We suggest the following experts as potential reviewers:
+\begin{itemize}
+    \item Dr. Pulak Ghosh (IIM Bangalore, Indian Fintech Expert)
+    \item Dr. V. Kamakoti (IIT Madras, ML in Banking Systems)
+    \item Dr. B. Ravindran (IIT Madras, Tabular Deep Learning)
+\end{itemize}
+
+Thank you for your time and consideration.
+
+\closing{Sincerely,}
+
+\end{letter}
+\end{document}

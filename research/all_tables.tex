@@ -1,0 +1,93 @@
+% IEEE TNNLS Table Consolidated File
+% These tables use the IEEEtran class standards
+
+% --- TABLE 1: DATASET STATISTICS ---
+\begin{table}[!t]
+\renewcommand{\arraystretch}{1.3}
+\caption{Descriptive Statistics of the Synthetic MSME Dataset (N=75,000)}
+\label{table_stats}
+\centering
+\begin{tabular}{l|c|c|c}
+\hline
+Feature Category & Count & Mean/Dist & Range \\
+\hline
+Bureau Features & 8 & -- & -- \\
+Digital Signals & 7 & -- & -- \\
+RBI/Compliance & 4 & -- & -- \\
+Target (Default Rate) & 1 & 20.00\% & [0, 1] \\
+Thin-File Subgroup & 26,182 & 34.91\% & -- \\
+\hline
+\end{tabular}
+\end{table}
+
+% --- TABLE 2: DATASET VALIDITY ---
+\begin{table}[!t]
+\renewcommand{\arraystretch}{1.3}
+\caption{Dataset Validity Benchmarks against RBI MSME Reports 2023}
+\label{table_validity}
+\centering
+\begin{tabular}{l|c|c|c}
+\hline
+Feature & Test Type & Statistic & Result \\
+\hline
+CIBIL Score & KS Test & 0.1490 & p < 0.001 \\
+Annual Turnover & KS Test & 0.5174 & p < 0.001 \\
+Sector Density & $\chi^2$ Test & 29718.15 & p < 0.001 \\
+CIBIL vs Default & Pearson r & -0.4932 & PASS \\
+GST vs UPI & Pearson r & 0.4115 & PASS \\
+\hline
+\end{tabular}
+\end{table}
+
+% --- TABLE 3: ABLATION STUDY ---
+\begin{table}[!t]
+\renewcommand{\arraystretch}{1.3}
+\caption{Ablation Study Results Across Feature Subsets}
+\label{table_ablation}
+\centering
+\begin{tabular}{l|c|c|c}
+\hline
+Variant & Subgroup & AUC-ROC & F1-Score \\
+\hline
+Bureau Only & Full & 0.8440 & 0.5712 \\
+Alt Only & Thin-File & 0.7855 & 0.6889 \\
+\textbf{Combined (All)} & \textbf{Full} & \textbf{0.8908} & \textbf{0.6550} \\
+Combined (All) & Thin-File & 0.8510 & 0.7419 \\
+\hline
+\end{tabular}
+\end{table}
+
+% --- TABLE 4: ENSEMBLE COMPARISON ---
+\begin{table}[!t]
+\renewcommand{\arraystretch}{1.3}
+\caption{Ensemble Strategy Performance Comparison}
+\label{table_ensemble}
+\centering
+\begin{tabular}{l|c|c}
+\hline
+Architecture & AUC-ROC & Accuracy \\
+\hline
+Weighted Average (0.4/0.6) & 0.8932 & 84.1\% \\
+\textbf{Stacking Ensemble (Meta-LR)} & \textbf{0.9105} & \textbf{86.5\%} \\
+\hline
+Improvement & +0.0173 & +2.4\% \\
+\hline
+\end{tabular}
+\end{table}
+
+% --- TABLE 5: FINAL MODEL COMPARISON ---
+\begin{table}[!t]
+\renewcommand{\arraystretch}{1.3}
+\caption{Comparison with Baseline Models on MSME-75k Dataset}
+\label{table_comparison}
+\centering
+\begin{tabular}{l|c|c|c}
+\hline
+Model & AUC & F1 & Precision \\
+\hline
+XGBoost (Optimized) & 0.8908 & 0.6550 & 0.5732 \\
+TabNet (Corrected) & 0.8845 & 0.6421 & 0.5510 \\
+\textbf{Proposed Hybrid} & \textbf{0.9105} & \textbf{0.6892} & \textbf{0.6015} \\
+\hline
+\end{tabular}
+\end{table}
