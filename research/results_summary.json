@@ -1,0 +1,36 @@
+{
+  "ablation_study": {
+    "variant_a_bureau_only": {
+      "auc": 0.8440,
+      "f1": 0.5712,
+      "precision": 0.4501,
+      "recall": 0.7816
+    },
+    "variant_b_alt_only": {
+      "auc": 0.7533,
+      "f1": 0.4692,
+      "precision": 0.3574,
+      "recall": 0.6827
+    },
+    "variant_c_combined": {
+      "auc": 0.8908,
+      "f1": 0.6550,
+      "precision": 0.5732,
+      "recall": 0.7640
+    },
+    "thin_file_subgroup": {
+      "combined_auc": 0.8510,
+      "combined_f1": 0.7419
+    }
+  },
+  "optimized_models": {
+    "tabnet_fix1_auc": "TBD (Run fix1.py)",
+    "tabnet_optuna_best_auc": "TBD (Run fix2.py)",
+    "stacking_ensemble_auc": "TBD (Run fix4.py)"
+  },
+  "ensemble_comparison": {
+    "weighted_avg_auc": "TBD",
+    "stacking_auc": "TBD",
+    "winner": "TBD"
+  }
+}
