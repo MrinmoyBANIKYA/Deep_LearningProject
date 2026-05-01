@@ -1,0 +1,4 @@
+=== DATASET GENERATION AUDIT LOG ===
+Test 1: Default Rate (Target 19%): 0.1957 -> PASS
+Test 2: Corr(GST, Default) Thin-file (Target [-0.45, -0.30]): -0.3825 -> PASS
+Test 3: Sectoral Chi-squared vs RBI Census: p=0.5001 -> PASS
