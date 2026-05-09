@@ -15,6 +15,18 @@ import warnings
 import os
 import joblib
 from evaluation_utils import compute_ks_statistic, compute_gini, mcnemar_test
+from config import RANDOM_SEED
+import random
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+set_seed(RANDOM_SEED)
 
 # Set aesthetic style
 sns.set_theme(style="whitegrid")
@@ -36,7 +48,7 @@ def get_stacking_data(X_df, y_df, n_splits=5):
     """
     X = X_df.values
     y = y_df.values
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_SEED)
     
     oof_xgb = np.zeros(len(y))
     oof_tab = np.zeros(len(y))
@@ -48,7 +60,7 @@ def get_stacking_data(X_df, y_df, n_splits=5):
         'n_estimators': 330, 'max_depth': 10, 'learning_rate': 0.0176,
         'subsample': 0.686, 'colsample_bytree': 0.693,
         'reg_alpha': 0.233, 'reg_lambda': 0.0058,
-        'use_label_encoder': False, 'eval_metric': 'logloss', 'random_state': 42
+        'use_label_encoder': False, 'eval_metric': 'logloss', 'random_state': RANDOM_SEED
     }
     
     if os.path.exists('xgb_best.pkl'):
@@ -82,7 +94,7 @@ def get_stacking_data(X_df, y_df, n_splits=5):
             lambda_sparse=0.001, optimizer_fn=torch.optim.Adam,
             optimizer_params=dict(lr=0.02),
             scheduler_params=dict(gamma=0.95, step_size=1000),
-            scheduler_fn=StepLR, verbose=0
+            scheduler_fn=StepLR, seed=RANDOM_SEED, verbose=0
         )
         
         tab_model.fit(
@@ -116,10 +128,10 @@ def run_ablation(df, trad_feats, alt_feats, all_feats, y):
         
         # Train meta-learner on full OOF
         X_meta = np.column_stack((xgb_oof, tab_oof))
-        lr_meta = LogisticRegression(C=1.0, solver='lbfgs', random_state=42)
+        lr_meta = LogisticRegression(C=1.0, solver='lbfgs', random_state=RANDOM_SEED)
         
         # Evaluate using CV on meta-features to get AUC
-        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_SEED)
         cv_res = cross_validate(lr_meta, X_meta, y, cv=skf, scoring='roc_auc')
         mean_auc = np.mean(cv_res['test_score'])
         
@@ -154,10 +166,10 @@ def main():
     
     # Meta-learner: Logistic Regression
     X_meta = np.column_stack((xgb_oof, tab_oof))
-    lr_meta = LogisticRegression(C=1.0, solver='lbfgs', random_state=42)
+    lr_meta = LogisticRegression(C=1.0, solver='lbfgs', random_state=RANDOM_SEED)
     
     # Stratified 5-fold CV on meta-features for evaluation
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_SEED)
     ensemble_metrics = {'auc': [], 'ap': [], 'f1': [], 'brier': [], 'gini': [], 'ks': []}
     oof_hybrid = np.zeros(len(y))
     
@@ -231,8 +243,8 @@ def main():
     print("\nGenerating comparison.png...")
     # Get baseline performance
     # LR and RF baselines
-    cv_lr = cross_validate(LogisticRegression(max_iter=1000), df[all_features], y, cv=skf, scoring='roc_auc')
-    cv_rf = cross_validate(RandomForestClassifier(n_estimators=100, random_state=42), df[all_features], y, cv=skf, scoring='roc_auc')
+    cv_lr = cross_validate(LogisticRegression(max_iter=1000, random_state=RANDOM_SEED), df[all_features], y, cv=skf, scoring='roc_auc')
+    cv_rf = cross_validate(RandomForestClassifier(n_estimators=100, random_state=RANDOM_SEED), df[all_features], y, cv=skf, scoring='roc_auc')
     
     results_to_plot = {
         'Logistic Regression': np.mean(cv_lr['test_score']),

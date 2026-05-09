@@ -10,6 +10,18 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 from evaluation_utils import compute_ks_statistic, compute_gini
+from config import RANDOM_SEED
+import random
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+set_seed(RANDOM_SEED)
 
 def find_optimal_threshold(y_true, y_probs):
     """Find the optimal probability threshold using Youden's J statistic."""
@@ -27,7 +39,7 @@ def main():
     feature_names = df.drop('default', axis=1).columns.tolist()
 
     # 2. Stratified 5-Fold CV setup
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_SEED)
     
     metrics = {'auc': [], 'ap': [], 'f1': [], 'brier': [], 'gini': [], 'ks': []}
     tprs = []
@@ -55,6 +67,7 @@ def main():
             optimizer_params=dict(lr=0.02),
             scheduler_params=dict(gamma=0.95, step_size=1000),
             scheduler_fn=StepLR,
+            seed=RANDOM_SEED,
             verbose=0 # Keep console clean
         )
 

@@ -11,6 +11,18 @@ import seaborn as sns
 import os
 import warnings
 from evaluation_utils import compute_ks_statistic
+from config import RANDOM_SEED
+import random
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+set_seed(RANDOM_SEED)
 
 # Suppress warnings
 warnings.filterwarnings('ignore')
@@ -24,7 +36,7 @@ def run_hybrid_cred_cv(X_df, y, n_splits=5):
     Train a Hybrid ensemble (XGBoost + TabNet) with 5-fold CV.
     Returns mean AUC and mean KS statistic.
     """
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_SEED)
     
     aucs = []
     ks_stats = []
@@ -57,7 +69,7 @@ def run_hybrid_cred_cv(X_df, y, n_splits=5):
             colsample_bytree=0.8,
             use_label_encoder=False,
             eval_metric='logloss',
-            random_state=42
+            random_state=RANDOM_SEED
         )
         xgb_model.fit(X_tr_xgb, y_tr)
         xgb_probs = xgb_model.predict_proba(X_val_xgb)[:, 1]
@@ -65,7 +77,7 @@ def run_hybrid_cred_cv(X_df, y, n_splits=5):
         # 2. TabNet
         tab_model = TabNetClassifier(
             verbose=0,
-            seed=42,
+            seed=RANDOM_SEED,
             optimizer_fn=torch.optim.Adam,
             optimizer_params=dict(lr=2e-2),
             scheduler_params={"step_size": 10, "gamma": 0.9},
@@ -105,7 +117,7 @@ def main():
     # Use a subset for faster ablation study if dataset is large
     if len(df) > 20000:
         print(f"Subsampling 20,000 rows for faster execution...")
-        df = df.sample(20000, random_state=42).reset_index(drop=True)
+        df = df.sample(20000, random_state=RANDOM_SEED).reset_index(drop=True)
     
     target = 'default_12m'
     y = df[target]

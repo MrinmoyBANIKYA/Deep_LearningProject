@@ -7,6 +7,15 @@ from sklearn.preprocessing import RobustScaler, LabelEncoder
 from sklearn.metrics import (roc_auc_score, f1_score, roc_curve)
 from evaluation_utils import compute_ks_statistic, compute_gini
 import os
+from config import RANDOM_SEED
+import random
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+set_seed(RANDOM_SEED)
 
 def find_optimal_threshold(y_true, y_probs):
     """Find the optimal probability threshold using Youden's J statistic."""
@@ -51,9 +60,9 @@ def main():
     # 3. Hyperparameter Tuning (5-fold CV)
     print("Starting 5-fold CV for Logistic Regression (L2 regularization)...")
     param_grid = {'C': [0.1, 0.5, 1.0, 5.0]}
-    lr = LogisticRegression(penalty='l2', solver='lbfgs', max_iter=1000, random_state=42)
+    lr = LogisticRegression(penalty='l2', solver='lbfgs', max_iter=1000, random_state=RANDOM_SEED)
     
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_SEED)
     grid_search = GridSearchCV(lr, param_grid, cv=skf, scoring='roc_auc', n_jobs=-1)
     grid_search.fit(X_scaled, y)
     

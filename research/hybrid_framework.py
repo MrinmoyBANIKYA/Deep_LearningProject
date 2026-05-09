@@ -12,6 +12,18 @@ import seaborn as sns
 import joblib
 import warnings
 from evaluation_utils import compute_ks_statistic, compute_gini
+from config import RANDOM_SEED
+import random
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+set_seed(RANDOM_SEED)
 
 warnings.filterwarnings('ignore')
 
@@ -32,11 +44,11 @@ def main():
     feature_names = df.drop('default_12m', axis=1).columns.tolist()
 
     # Split into Train (85%) and Test (15%)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=42, stratify=y)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=RANDOM_SEED, stratify=y)
 
     # 2. OOF Stacking Configuration
     n_splits = 5
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_SEED)
     
     oof_xgb = np.zeros(len(y_train))
     oof_tabnet = np.zeros(len(y_train))
@@ -57,7 +69,7 @@ def main():
             subsample=0.8, colsample_bytree=0.8, 
             scale_pos_weight=len(y_tr[y_tr==0])/len(y_tr[y_tr==1]),
             use_label_encoder=False, eval_metric='logloss',
-            random_state=42
+            random_state=RANDOM_SEED
         )
         xgb_model.fit(X_tr, y_tr)
         
@@ -70,7 +82,7 @@ def main():
             optimizer_params=dict(lr=2e-2),
             scheduler_params={"step_size":50, "gamma":0.9},
             scheduler_fn=torch.optim.lr_scheduler.StepLR,
-            epsilon=1e-15, verbose=0
+            epsilon=1e-15, seed=RANDOM_SEED, verbose=0
         )
         # Use a subset of training data for TabNet validation if needed, 
         # but here we use the fold's validation set for early stopping.
@@ -104,7 +116,7 @@ def main():
     
     # 4. Train Meta-Learner (Logistic Regression)
     print("Training Logistic Regression meta-learner...")
-    meta_model = LogisticRegression(solver='lbfgs', random_state=42)
+    meta_model = LogisticRegression(solver='lbfgs', random_state=RANDOM_SEED)
     meta_model.fit(X_meta, y_train)
     
     # 5. Generate Test Predictions (Stacking)

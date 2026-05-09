@@ -10,6 +10,16 @@ from sklearn.metrics import (roc_auc_score, average_precision_score, f1_score,
                              brier_score_loss, roc_curve, precision_recall_curve)
 from sklearn.utils.class_weight import compute_sample_weight
 from evaluation_utils import compute_ks_statistic, compute_gini
+from config import RANDOM_SEED
+import random
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    # torch is not used here but good practice if it were
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+set_seed(RANDOM_SEED)
 
 def find_optimal_threshold(y_true, y_probs):
     """Find the optimal probability threshold using Youden's J statistic."""
@@ -31,11 +41,11 @@ def objective(trial, X, y):
         'scale_pos_weight': len(y[y == 0]) / len(y[y == 1]), # Auto from class ratio
         'use_label_encoder': False,
         'eval_metric': 'logloss',
-        'random_state': 42
+        'random_state': RANDOM_SEED
     }
     
     # 3-fold inner CV for tuning speed
-    cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+    cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=RANDOM_SEED)
     losses = []
     
     for train_idx, val_idx in cv.split(X, y):
@@ -58,7 +68,7 @@ def main():
     
     # 2. Hyperparameter Tuning with Optuna
     print("\nStarting Optuna optimization (50 trials)...")
-    study = optuna.create_study(direction='minimize')
+    study = optuna.create_study(direction='minimize', sampler=optuna.samplers.TPESampler(seed=RANDOM_SEED))
     study.optimize(lambda trial: objective(trial, X, y), n_trials=50)
     
     print("\nBest Hyperparameters:")
@@ -66,7 +76,7 @@ def main():
     
     # 3. Stratified 5-Fold Cross-Validation
     print("\nStarting 5-Fold Stratified CV...")
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_SEED)
     
     metrics = {
         'auc': [], 'ap': [], 'f1': [], 'brier': [], 'gini': [], 'ks': []

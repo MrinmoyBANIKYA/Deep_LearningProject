@@ -11,6 +11,15 @@ import seaborn as sns
 import os
 import warnings
 from evaluation_utils import compute_ks_statistic
+from config import RANDOM_SEED
+import random
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+set_seed(RANDOM_SEED)
 
 # Suppress warnings
 warnings.filterwarnings('ignore')
@@ -54,13 +63,13 @@ def main():
         X[col] = le.fit_transform(X[col].astype(str))
     
     # 3. Split
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=RANDOM_SEED, stratify=y)
     
     # 4. Define Models
     models = {
-        "Logistic Regression": LogisticRegression(max_iter=1000, random_state=42),
-        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
-        "XGBoost": xgb.XGBClassifier(n_estimators=100, max_depth=6, learning_rate=0.05, random_state=42, use_label_encoder=False, eval_metric='logloss')
+        "Logistic Regression": LogisticRegression(max_iter=1000, random_state=RANDOM_SEED),
+        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=RANDOM_SEED),
+        "XGBoost": xgb.XGBClassifier(n_estimators=100, max_depth=6, learning_rate=0.05, random_state=RANDOM_SEED, use_label_encoder=False, eval_metric='logloss')
     }
     
     # 5. Main Evaluation
