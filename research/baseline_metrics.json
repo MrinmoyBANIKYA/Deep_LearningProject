@@ -1,0 +1,8 @@
+{
+    "best_C": 0.1,
+    "auc_roc": 0.8913,
+    "gini_coefficient": 0.7825,
+    "ks_statistic": 0.6234,
+    "optimal_threshold": 0.2331,
+    "f1_score": 0.641
+}
