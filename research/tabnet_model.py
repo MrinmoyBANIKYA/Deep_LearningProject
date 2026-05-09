@@ -9,6 +9,7 @@ from sklearn.metrics import (roc_auc_score, average_precision_score, f1_score,
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+from evaluation_utils import compute_ks_statistic, compute_gini
 
 def find_optimal_threshold(y_true, y_probs):
     """Find the optimal probability threshold using Youden's J statistic."""
@@ -28,7 +29,7 @@ def main():
     # 2. Stratified 5-Fold CV setup
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     
-    metrics = {'auc': [], 'ap': [], 'f1': [], 'brier': []}
+    metrics = {'auc': [], 'ap': [], 'f1': [], 'brier': [], 'gini': [], 'ks': []}
     tprs = []
     mean_fpr = np.linspace(0, 1, 100)
     best_auc = 0
@@ -79,6 +80,8 @@ def main():
         metrics['ap'].append(average_precision_score(y_test, y_probs))
         metrics['f1'].append(f1_score(y_test, y_preds))
         metrics['brier'].append(brier_score_loss(y_test, y_probs))
+        metrics['gini'].append(compute_gini(y_test, y_probs))
+        metrics['ks'].append(compute_ks_statistic(y_test, y_probs))
 
         print(f"Fold {fold+1} Results: AUC={fold_auc:.4f}, AP={metrics['ap'][-1]:.4f}")
 

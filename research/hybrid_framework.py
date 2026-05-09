@@ -3,35 +3,21 @@ import numpy as np
 import torch
 import xgboost as xgb
 from pytorch_tabnet.tab_model import TabNetClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, f1_score, accuracy_score
-from sklearn.calibration import CalibratedClassifierCV, calibration_curve
+from sklearn.calibration import CalibratedClassifierCV
 import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
+import warnings
+from evaluation_utils import compute_ks_statistic, compute_gini
 
-def calculate_ece(y_true, y_probs, n_bins=10):
-    """Calculate Expected Calibration Error (ECE)."""
-    bin_boundaries = np.linspace(0, 1, n_bins + 1)
-    bin_lowers = bin_boundaries[:-1]
-    bin_uppers = bin_boundaries[1:]
-    
-    ece = 0
-    for bin_lower, bin_upper in zip(bin_lowers, bin_uppers):
-        # Determine points in the current bin
-        in_bin = (y_probs > bin_lower) & (y_probs <= bin_upper)
-        prop_in_bin = np.mean(in_bin)
-        
-        if prop_in_bin > 0:
-            accuracy_in_bin = np.mean(y_true[in_bin])
-            avg_confidence_in_bin = np.mean(y_probs[in_bin])
-            ece += np.abs(avg_confidence_in_bin - accuracy_in_bin) * prop_in_bin
-            
-    return ece
+warnings.filterwarnings('ignore')
 
 def main():
     # 1. Load Data
-    print("Loading msme_credit_dataset_75k.csv for Hybrid Framework...")
+    print("Loading msme_credit_dataset_75k.csv for OOF Stacking...")
     df = pd.read_csv('../msme_credit_dataset_75k.csv')
     
     # Preprocessing
@@ -45,149 +31,126 @@ def main():
     y = df['default_12m'].values
     feature_names = df.drop('default_12m', axis=1).columns.tolist()
 
-    # Split into Train (70%), Val (15%), Test (15%)
-    X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
-    X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42, stratify=y_temp)
+    # Split into Train (85%) and Test (15%)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=42, stratify=y)
 
-    # 2. Train TabNet (Deep Learning)
-    print("\nTraining TabNet Model...")
-    tabnet = TabNetClassifier(
-        n_d=64, n_a=64, n_steps=5,
-        gamma=1.5, n_independent=2, n_shared=2,
-        lambda_sparse=1e-4, momentum=0.02, clip_value=2.,
-        optimizer_fn=torch.optim.Adam,
-        optimizer_params=dict(lr=2e-2),
-        scheduler_params={"step_size":50, "gamma":0.9},
-        scheduler_fn=torch.optim.lr_scheduler.StepLR,
-        epsilon=1e-15
-    )
+    # 2. OOF Stacking Configuration
+    n_splits = 5
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+    
+    oof_xgb = np.zeros(len(y_train))
+    oof_tabnet = np.zeros(len(y_train))
+    
+    test_probs_xgb = np.zeros((len(y_test), n_splits))
+    test_probs_tabnet = np.zeros((len(y_test), n_splits))
 
-    tabnet.fit(
-        X_train=X_train, y_train=y_train,
-        eval_set=[(X_val, y_val)],
-        eval_metric=['auc'],
-        max_epochs=100, patience=20,
-        batch_size=1024, virtual_batch_size=128,
-        num_workers=0, drop_last=False
-    )
+    print(f"\nStarting {n_splits}-Fold OOF Stacking...")
+    
+    for fold, (train_idx, val_idx) in enumerate(skf.split(X_train, y_train)):
+        print(f"\n--- Fold {fold + 1} ---")
+        X_tr, X_val = X_train[train_idx], X_train[val_idx]
+        y_tr, y_val = y_train[train_idx], y_train[val_idx]
+        
+        # A. Train XGBoost
+        xgb_model = xgb.XGBClassifier(
+            n_estimators=500, max_depth=6, learning_rate=0.05,
+            subsample=0.8, colsample_bytree=0.8, 
+            scale_pos_weight=len(y_tr[y_tr==0])/len(y_tr[y_tr==1]),
+            use_label_encoder=False, eval_metric='logloss',
+            random_state=42
+        )
+        xgb_model.fit(X_tr, y_tr)
+        
+        # B. Train TabNet
+        tabnet = TabNetClassifier(
+            n_d=64, n_a=64, n_steps=5,
+            gamma=1.5, n_independent=2, n_shared=2,
+            lambda_sparse=1e-4, momentum=0.02, clip_value=2.,
+            optimizer_fn=torch.optim.Adam,
+            optimizer_params=dict(lr=2e-2),
+            scheduler_params={"step_size":50, "gamma":0.9},
+            scheduler_fn=torch.optim.lr_scheduler.StepLR,
+            epsilon=1e-15, verbose=0
+        )
+        # Use a subset of training data for TabNet validation if needed, 
+        # but here we use the fold's validation set for early stopping.
+        tabnet.fit(
+            X_train=X_tr, y_train=y_tr,
+            eval_set=[(X_val, y_val)],
+            eval_metric=['auc'],
+            max_epochs=100, patience=20,
+            batch_size=1024, virtual_batch_size=128
+        )
+        
+        # C. Generate OOF Predictions
+        oof_xgb[val_idx] = xgb_model.predict_proba(X_val)[:, 1]
+        oof_tabnet[val_idx] = tabnet.predict_proba(X_val)[:, 1]
+        
+        # D. Generate Test Predictions for this fold
+        test_probs_xgb[:, fold] = xgb_model.predict_proba(X_test)[:, 1]
+        test_probs_tabnet[:, fold] = tabnet.predict_proba(X_test)[:, 1]
+        
+        print(f"Fold {fold+1} XGB AUC: {roc_auc_score(y_val, oof_xgb[val_idx]):.4f}")
+        print(f"Fold {fold+1} Tab AUC: {roc_auc_score(y_val, oof_tabnet[val_idx]):.4f}")
 
-    # 3. Train XGBoost (Gradient Boosting)
-    print("\nTraining XGBoost Model...")
-    xgb_model = xgb.XGBClassifier(
-        n_estimators=500, max_depth=6, learning_rate=0.05,
-        subsample=0.8, colsample_bytree=0.8, 
-        scale_pos_weight=len(y_train[y_train==0])/len(y_train[y_train==1]),
-        use_label_encoder=False, eval_metric='logloss'
-    )
-    xgb_model.fit(X_train, y_train)
-
-    # 4. Platt Scaling Calibration
-    print("\nApplying Platt Scaling (CalibratedClassifierCV)...")
+    # 3. Create Meta-Features (Level 2 Training Matrix)
+    # Passthrough features: Index 0 (CIBIL), 7 (UPI/Enquiries), 9 (GST/Age)
+    print("\nPreparing meta-features for Level 2 learner...")
+    X_meta = np.column_stack([
+        oof_xgb, 
+        oof_tabnet, 
+        X_train[:, [0, 7, 9]]
+    ])
     
-    # Calibrate TabNet
-    tabnet_calibrated = CalibratedClassifierCV(tabnet, method='sigmoid', cv='prefit')
-    tabnet_calibrated.fit(X_val, y_val)
+    # 4. Train Meta-Learner (Logistic Regression)
+    print("Training Logistic Regression meta-learner...")
+    meta_model = LogisticRegression(solver='lbfgs', random_state=42)
+    meta_model.fit(X_meta, y_train)
     
-    # Calibrate XGBoost
-    xgb_calibrated = CalibratedClassifierCV(xgb_model, method='sigmoid', cv='prefit')
-    xgb_calibrated.fit(X_val, y_val)
-
-    # 5. Calibration Evaluation & Plotting
-    print("\nEvaluating Calibration and Generating Reliability Diagrams...")
+    # 5. Generate Test Predictions (Stacking)
+    # Average base model predictions from all folds
+    mean_test_xgb = test_probs_xgb.mean(axis=1)
+    mean_test_tabnet = test_probs_tabnet.mean(axis=1)
     
-    # Get probabilities on Test Set
-    tab_uncal = tabnet.predict_proba(X_test)[:, 1]
-    tab_cal = tabnet_calibrated.predict_proba(X_test)[:, 1]
-    xgb_uncal = xgb_model.predict_proba(X_test)[:, 1]
-    xgb_cal = xgb_calibrated.predict_proba(X_test)[:, 1]
+    X_meta_test = np.column_stack([
+        mean_test_xgb, 
+        mean_test_tabnet, 
+        X_test[:, [0, 7, 9]]
+    ])
     
-    # Calculate ECE
-    ece_tab_uncal = calculate_ece(y_test, tab_uncal)
-    ece_tab_cal = calculate_ece(y_test, tab_cal)
-    ece_xgb_uncal = calculate_ece(y_test, xgb_uncal)
-    ece_xgb_cal = calculate_ece(y_test, xgb_cal)
+    final_probs = meta_model.predict_proba(X_meta_test)[:, 1]
+    final_preds = (final_probs > 0.5).astype(int)
     
-    print(f"TabNet ECE: Uncalibrated={ece_tab_uncal:.4f}, Calibrated={ece_tab_cal:.4f}")
-    print(f"XGBoost ECE: Uncalibrated={ece_xgb_uncal:.4f}, Calibrated={ece_xgb_cal:.4f}")
+    # 6. Final Evaluation
+    stacking_auc = roc_auc_score(y_test, final_probs)
+    xgb_mean_auc = roc_auc_score(y_test, mean_test_xgb)
+    tab_mean_auc = roc_auc_score(y_test, mean_test_tabnet)
+    stacking_gini = compute_gini(y_test, final_probs)
+    stacking_ks = compute_ks_statistic(y_test, final_probs)
     
-    # Plot Reliability Diagrams
-    plt.figure(figsize=(12, 10))
+    print(f"\n--- Final Stacking Evaluation ---")
+    print(f"Mean XGBoost AUC: {xgb_mean_auc:.4f}")
+    print(f"Mean TabNet AUC: {tab_mean_auc:.4f}")
+    print(f"Stacking Ensemble AUC: {stacking_auc:.4f}")
+    print(f"Stacking Gini Coefficient: {stacking_gini:.4f}")
+    print(f"Stacking KS Statistic: {stacking_ks:.4f}")
     
-    # TabNet Calibration Curve
-    plt.subplot(2, 1, 1)
-    fop_uncal, mpv_uncal = calibration_curve(y_test, tab_uncal, n_bins=10)
-    fop_cal, mpv_cal = calibration_curve(y_test, tab_cal, n_bins=10)
-    plt.plot(mpv_uncal, fop_uncal, marker='o', linewidth=1, label=f'Uncalibrated (ECE={ece_tab_uncal:.3f})')
-    plt.plot(mpv_cal, fop_cal, marker='s', linewidth=1, label=f'Platt Scaled (ECE={ece_tab_cal:.3f})')
-    plt.plot([0, 1], [0, 1], linestyle='--', color='gray', label='Perfectly Calibrated')
-    plt.xlabel('Mean Predicted Probability')
-    plt.ylabel('Fraction of Positives')
-    plt.title('Reliability Diagram: TabNet')
-    plt.legend()
-    
-    # XGBoost Calibration Curve
-    plt.subplot(2, 1, 2)
-    fop_uncal, mpv_uncal = calibration_curve(y_test, xgb_uncal, n_bins=10)
-    fop_cal, mpv_cal = calibration_curve(y_test, xgb_cal, n_bins=10)
-    plt.plot(mpv_uncal, fop_uncal, marker='o', linewidth=1, label=f'Uncalibrated (ECE={ece_xgb_uncal:.3f})')
-    plt.plot(mpv_cal, fop_cal, marker='s', linewidth=1, label=f'Platt Scaled (ECE={ece_xgb_cal:.3f})')
-    plt.plot([0, 1], [0, 1], linestyle='--', color='gray', label='Perfectly Calibrated')
-    plt.xlabel('Mean Predicted Probability')
-    plt.ylabel('Fraction of Positives')
-    plt.title('Reliability Diagram: XGBoost')
-    plt.legend()
-    
-    plt.tight_layout()
-    plt.savefig('calibration_curves.png')
-    print("Saved calibration_curves.png")
-
-    # 6. Hybrid Ensemble Logic (Weighted Average using Calibrated Probs)
-    print("\nEvaluating Hybrid Ensemble (Calibrated)...")
-    # Weighted ensemble (0.4 TabNet + 0.6 XGBoost) using calibrated probabilities
-    hybrid_probs = (0.4 * tab_cal) + (0.6 * xgb_cal)
-    hybrid_preds = (hybrid_probs > 0.5).astype(int)
-
-    # 7. Metrics Comparison
-    tabnet_auc = roc_auc_score(y_test, tab_cal)
-    xgb_auc = roc_auc_score(y_test, xgb_cal)
-    hybrid_auc = roc_auc_score(y_test, hybrid_probs)
-
-    print(f"\nResults on Test Set (Calibrated):")
-    print(f"TabNet AUC: {tabnet_auc:.4f}")
-    print(f"XGBoost AUC: {xgb_auc:.4f}")
-    print(f"Hybrid AUC: {hybrid_auc:.4f}")
-
-    # 8. Visualization 1: Feature Importance (TabNet Attention)
-    print("\nGenerating TabNet Attention Plot...")
-    explain_matrix, masks = tabnet.explain(X_test)
-    
-    plt.figure(figsize=(12, 6))
-    importance = np.mean(explain_matrix, axis=0)
-    indices = np.argsort(importance)[::-1]
-    
-    sns.barplot(x=importance[indices], y=[feature_names[i] for i in indices], palette='magma')
-    plt.title('TabNet Sequential Attention (Global Feature Importance)')
-    plt.tight_layout()
-    plt.savefig('tabnet_attention.png')
-    print("Saved tabnet_attention.png")
-
-    # 9. Visualization 2: Model Comparison
+    # 7. Visualization: Model Comparison
     plt.figure(figsize=(10, 6))
-    models = ['TabNet (Cal)', 'XGBoost (Cal)', 'Hybrid (Ensemble)']
-    aucs = [tabnet_auc, xgb_auc, hybrid_auc]
-    sns.barplot(x=models, y=aucs, palette='Blues_d')
-    plt.ylim(0.7, 1.0)
+    models = ['Avg XGBoost', 'Avg TabNet', 'OOF Stacking (LR)']
+    aucs = [xgb_mean_auc, tab_mean_auc, stacking_auc]
+    sns.barplot(x=models, y=aucs, palette='viridis')
+    plt.ylim(0.8, 1.0)
     plt.ylabel('AUC-ROC Score')
-    plt.title('Model Performance Comparison (Calibrated)')
-    plt.savefig('model_comparison.png')
-    print("Saved model_comparison.png")
+    plt.title('Performance Comparison: Base Models vs Stacking')
+    for i, v in enumerate(aucs):
+        plt.text(i, v + 0.005, f"{v:.4f}", ha='center', fontweight='bold')
+    plt.savefig('stacking_comparison.png')
+    print("\nComparison plot saved as stacking_comparison.png")
 
-    # 10. Save Models
-    joblib.dump(xgb_calibrated, 'hybrid_xgb_calibrated.pkl')
-    # TabNet calibrated needs a different approach to save since it's a wrapper
-    # We'll save the base model and the calibration wrapper separately or just use joblib
-    joblib.dump(tabnet_calibrated, 'hybrid_tabnet_calibrated.pkl')
-    print("\nCalibrated models saved as hybrid_xgb_calibrated.pkl and hybrid_tabnet_calibrated.pkl")
+    # 8. Save Models
+    joblib.dump(meta_model, 'stacking_meta_learner.pkl')
+    print("Meta-learner saved as stacking_meta_learner.pkl")
 
 if __name__ == "__main__":
     main()

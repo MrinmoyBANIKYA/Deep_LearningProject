@@ -14,6 +14,7 @@ import seaborn as sns
 import warnings
 import os
 import joblib
+from evaluation_utils import compute_ks_statistic, compute_gini, mcnemar_test
 
 # Set aesthetic style
 sns.set_theme(style="whitegrid")
@@ -157,7 +158,7 @@ def main():
     
     # Stratified 5-fold CV on meta-features for evaluation
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    ensemble_metrics = {'auc': [], 'ap': [], 'f1': [], 'brier': []}
+    ensemble_metrics = {'auc': [], 'ap': [], 'f1': [], 'brier': [], 'gini': [], 'ks': []}
     oof_hybrid = np.zeros(len(y))
     
     for fold, (train_idx, val_idx) in enumerate(skf.split(X_meta, y)):
@@ -175,11 +176,30 @@ def main():
         ensemble_metrics['ap'].append(average_precision_score(y_val_meta, fold_probs))
         ensemble_metrics['f1'].append(f1_score(y_val_meta, fold_preds))
         ensemble_metrics['brier'].append(brier_score_loss(y_val_meta, fold_probs))
+        ensemble_metrics['gini'].append(compute_gini(y_val_meta, fold_probs))
+        ensemble_metrics['ks'].append(compute_ks_statistic(y_val_meta, fold_probs))
     
     # 4. Final Reporting
     print("\n--- Stacking Ensemble Evaluation (Mean ± Std) ---")
     for k, v in ensemble_metrics.items():
         print(f"{k.upper()}: {np.mean(v):.4f} ± {np.std(v):.4f}")
+    
+    # McNemar's Test: Stacking vs XGBoost (using OOF predictions)
+    # Convert probabilities to binary predictions using optimal threshold
+    xgb_threshold = find_optimal_threshold(y, xgb_oof)
+    stacking_threshold = find_optimal_threshold(y, oof_hybrid)
+    
+    xgb_preds = (xgb_oof >= xgb_threshold).astype(int)
+    stacking_preds = (oof_hybrid >= stacking_threshold).astype(int)
+    
+    stat, p_val = mcnemar_test(y, xgb_preds, stacking_preds)
+    print(f"\n--- Statistical Significance (Stacking vs XGBoost) ---")
+    print(f"McNemar's Test Statistic: {stat:.4f}")
+    print(f"p-value: {p_val:.4g}")
+    if p_val < 0.05:
+        print("Result: Significant difference in error patterns (p < 0.05)")
+    else:
+        print("Result: No significant difference in error patterns (p >= 0.05)")
     
     # 5. Save Results to results.csv
     print("\nSaving results to results.csv...")

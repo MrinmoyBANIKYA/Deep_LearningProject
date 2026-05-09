@@ -9,6 +9,7 @@ from sklearn.ensemble import RandomForestClassifier
 import xgboost as xgb
 import joblib
 import os
+from evaluation_utils import compute_ks_statistic, compute_gini
 
 # IEEE Publication Style Settings
 plt.rcParams.update({
@@ -40,11 +41,11 @@ def main():
     
     # Metrics containers
     model_metrics = {
-        'Logistic Regression': {'auc': [], 'ap': [], 'f1': [], 'brier': []},
-        'Random Forest': {'auc': [], 'ap': [], 'f1': [], 'brier': []},
-        'XGBoost': {'auc': [], 'ap': [], 'f1': [], 'brier': []},
-        'TabNet': {'auc': [], 'ap': [], 'f1': [], 'brier': []},
-        'Hybrid Ensemble': {'auc': [], 'ap': [], 'f1': [], 'brier': []}
+        'Logistic Regression': {'auc': [], 'ap': [], 'f1': [], 'brier': [], 'gini': [], 'ks': []},
+        'Random Forest': {'auc': [], 'ap': [], 'f1': [], 'brier': [], 'gini': [], 'ks': []},
+        'XGBoost': {'auc': [], 'ap': [], 'f1': [], 'brier': [], 'gini': [], 'ks': []},
+        'TabNet': {'auc': [], 'ap': [], 'f1': [], 'brier': [], 'gini': [], 'ks': []},
+        'Hybrid Ensemble': {'auc': [], 'ap': [], 'f1': [], 'brier': [], 'gini': [], 'ks': []}
     }
     
     # Probability containers for ROC curves
@@ -89,6 +90,8 @@ def main():
             model_metrics[name]['ap'].append(average_precision_score(y_true_fold, y_prob_fold))
             model_metrics[name]['f1'].append(f1_score(y_true_fold, y_pred_fold))
             model_metrics[name]['brier'].append(brier_score_loss(y_true_fold, y_prob_fold))
+            model_metrics[name]['gini'].append(compute_gini(y_true_fold, y_prob_fold))
+            model_metrics[name]['ks'].append(compute_ks_statistic(y_true_fold, y_prob_fold))
 
     # --- 1. ROC Comparison Plot ---
     print("Generating fig_roc_comparison.png...")
@@ -184,12 +187,12 @@ def main():
 \\centering
 \\begin{tabular}{lcccc}
 \\hline
-Model & AUC-ROC & Avg. Precision & F1-Score & Brier Score \\\\
+Model & AUC-ROC & Gini & KS Stat & F1-Score & Brier Score \\\\
 \\hline
 """
     for name in model_metrics.keys():
         m = model_metrics[name]
-        latex_table_ii += f"{name} & {np.mean(m['auc']):.4f}\\pm{np.std(m['auc']):.4f} & {np.mean(m['ap']):.4f}\\pm{np.std(m['ap']):.4f} & {np.mean(m['f1']):.4f}\\pm{np.std(m['f1']):.4f} & {np.mean(m['brier']):.4f}\\pm{np.std(m['brier']):.4f} \\\\\n"
+        latex_table_ii += f"{name} & {np.mean(m['auc']):.4f} & {np.mean(m['gini']):.4f} & {np.mean(m['ks']):.4f} & {np.mean(m['f1']):.4f} & {np.mean(m['brier']):.4f} \\\\\n"
     
     latex_table_ii += """\\hline
 \\end{tabular}

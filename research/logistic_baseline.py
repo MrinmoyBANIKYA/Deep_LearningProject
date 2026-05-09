@@ -5,7 +5,7 @@ from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import RobustScaler, LabelEncoder
 from sklearn.metrics import (roc_auc_score, f1_score, roc_curve)
-from scipy.stats import ks_2samp
+from evaluation_utils import compute_ks_statistic, compute_gini
 import os
 
 def find_optimal_threshold(y_true, y_probs):
@@ -72,13 +72,10 @@ def main():
     auc = roc_auc_score(y, y_probs)
     
     # Gini Coefficient
-    gini = 2 * auc - 1
+    gini = compute_gini(y, y_probs)
     
     # KS Statistic
-    # Score distributions of defaulters vs non-defaulters
-    scores_defaulters = y_probs[y == 1]
-    scores_non_defaulters = y_probs[y == 0]
-    ks_stat, _ = ks_2samp(scores_defaulters, scores_non_defaulters)
+    ks_stat = compute_ks_statistic(y, y_probs)
     
     # F1-score at optimal threshold
     optimal_threshold = find_optimal_threshold(y, y_probs)

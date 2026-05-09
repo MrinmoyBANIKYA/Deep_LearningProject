@@ -9,6 +9,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import (roc_auc_score, average_precision_score, f1_score, 
                              brier_score_loss, roc_curve, precision_recall_curve)
 from sklearn.utils.class_weight import compute_sample_weight
+from evaluation_utils import compute_ks_statistic, compute_gini
 
 def find_optimal_threshold(y_true, y_probs):
     """Find the optimal probability threshold using Youden's J statistic."""
@@ -68,7 +69,7 @@ def main():
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     
     metrics = {
-        'auc': [], 'ap': [], 'f1': [], 'brier': []
+        'auc': [], 'ap': [], 'f1': [], 'brier': [], 'gini': [], 'ks': []
     }
     
     plt.figure(figsize=(10, 8))
@@ -98,6 +99,8 @@ def main():
         metrics['ap'].append(average_precision_score(y_test, y_probs))
         metrics['f1'].append(f1_score(y_test, y_preds))
         metrics['brier'].append(brier_score_loss(y_test, y_probs))
+        metrics['gini'].append(compute_gini(y_test, y_probs))
+        metrics['ks'].append(compute_ks_statistic(y_test, y_probs))
         
         print(f"Fold {i+1}: AUC={metrics['auc'][-1]:.4f}, F1={metrics['f1'][-1]:.4f}")
         
